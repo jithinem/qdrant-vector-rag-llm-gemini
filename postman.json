@@ -1,0 +1,56 @@
+{
+  "info": {
+    "name": "Qdrant Vector Search Demo",
+    "description": "Add documents and search them using Gemini embeddings and Qdrant.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/health"
+      }
+    },
+    {
+      "name": "Add document",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"Qdrant is a vector database for similarity search.\",\n  \"metadata\": { \"source\": \"demo\" }\n}"
+        },
+        "url": "{{baseUrl}}/documents"
+      }
+    },
+    {
+      "name": "Search documents",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"What is Qdrant used for?\",\n  \"limit\": 5\n}"
+        },
+        "url": "{{baseUrl}}/search"
+      }
+    }
+  ]
+}

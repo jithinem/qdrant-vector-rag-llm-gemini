@@ -1,0 +1,22 @@
+{
+  "name": "qdrant-vector-search-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A simple Express demo for Gemini embeddings and Qdrant vector search",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "seed": "node src/seed.js"
+  },
+  "dependencies": {
+    "@google/genai": "^1.30.0",
+    "axios": "^1.13.2",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}

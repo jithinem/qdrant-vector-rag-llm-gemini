@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-const axios = require('axios');
+const { QdrantClient } = require('@qdrant/js-client-rest');
 const { randomUUID } = require('node:crypto');
 const { embed } = require('./gemini');
 
@@ -12,12 +12,10 @@ const {
 } = process.env;
 
 const vectorSize = Number(GEMINI_EMBEDDING_DIMENSIONS);
-const qdrantUrl = QDRANT_URL.replace(/\/$/, '');
-const collectionPath = `/collections/${encodeURIComponent(QDRANT_COLLECTION)}`;
-const qdrantHeaders = {
-  'Content-Type': 'application/json',
-  ...(QDRANT_API_KEY ? { 'api-key': QDRANT_API_KEY } : {})
-};
+const qdrant = new QdrantClient({
+  url: QDRANT_URL,
+  ...(QDRANT_API_KEY ? { apiKey: QDRANT_API_KEY } : {})
+});
 
 const documents = [
   {
@@ -39,20 +37,11 @@ const documents = [
 ];
 
 async function ensureCollection() {
-  try {
-    await axios.get(`${qdrantUrl}${collectionPath}`, { headers: qdrantHeaders });
-  } catch (error) {
-    if (error.response?.status !== 404) throw error;
-
-    try {
-      await axios.put(
-        `${qdrantUrl}${collectionPath}`,
-        { vectors: { size: vectorSize, distance: 'Cosine' } },
-        { headers: qdrantHeaders }
-      );
-    } catch (createError) {
-      if (createError.response?.status !== 409) throw createError;
-    }
+  const { collections } = await qdrant.getCollections();
+  if (!collections.some(({ name }) => name === QDRANT_COLLECTION)) {
+    await qdrant.createCollection(QDRANT_COLLECTION, {
+      vectors: { size: vectorSize, distance: 'Cosine' }
+    });
   }
 }
 
@@ -72,15 +61,11 @@ async function seed() {
   }
 
   await ensureCollection();
-  await axios.put(
-    `${qdrantUrl}${collectionPath}/points?wait=true`,
-    { points },
-    { headers: qdrantHeaders }
-  );
+  await qdrant.upsert(QDRANT_COLLECTION, { wait: true, points });
   console.log(`Saved ${points.length} embedded documents to Qdrant.`);
 }
 
 seed().catch((error) => {
-  console.error(error.response?.data?.status?.error || error.message);
+  console.error(error.message);
   process.exitCode = 1;
 });

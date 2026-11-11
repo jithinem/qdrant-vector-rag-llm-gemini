@@ -1,6 +1,6 @@
 # Qdrant Vector Search Demo
 
-A minimal Express API that creates Gemini embeddings, stores/searches them in Qdrant, and generates a context-based answer.
+A minimal Express API that creates Gemini embeddings, stores/searches them in Qdrant using the official Qdrant JavaScript client, and generates a context-based answer.
 
 ## Setup
 

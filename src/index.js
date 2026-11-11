@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-const axios = require('axios');
+const { QdrantClient } = require('@qdrant/js-client-rest');
 const express = require('express');
 const morgan = require('morgan');
 const { randomUUID } = require('node:crypto');
@@ -37,46 +37,24 @@ if (!Number.isInteger(vectorSize) || vectorSize < 1) {
 }
 
 const app = express();
+const qdrant = new QdrantClient({
+  url: QDRANT_URL,
+  ...(QDRANT_API_KEY ? { apiKey: QDRANT_API_KEY } : {})
+});
 let collectionReady = false;
 
 app.use(express.json());
 app.use(morgan('dev'));
 
-function qdrantHeaders() {
-  const headers = { 'Content-Type': 'application/json' };
-  if (QDRANT_API_KEY) headers['api-key'] = QDRANT_API_KEY;
-  return headers;
-}
-
-async function qdrantRequest(path, options = {}) {
-  const response = await axios({
-    url: `${QDRANT_URL.replace(/\/$/, '')}${path}`,
-    ...options,
-    headers: { ...qdrantHeaders(), ...options.headers }
-  });
-  return response.data;
-}
-
 async function ensureCollection() {
   if (collectionReady) return;
 
-  const collectionPath = `/collections/${encodeURIComponent(QDRANT_COLLECTION)}`;
-  try {
-    await qdrantRequest(collectionPath);
-  } catch (error) {
-    if (error.response?.status !== 404) throw error;
-    try {
-      await qdrantRequest(collectionPath, {
-        method: 'PUT',
-        data: {
-          vectors: { size: vectorSize, distance: 'Cosine' }
-        }
-      });
-    } catch (error) {
-      if (error.response?.status !== 409) throw error;
-    }
+  const { collections } = await qdrant.getCollections();
+  if (!collections.some(({ name }) => name === QDRANT_COLLECTION)) {
+    await qdrant.createCollection(QDRANT_COLLECTION, {
+      vectors: { size: vectorSize, distance: 'Cosine' }
+    });
   }
-
   collectionReady = true;
 }
 
@@ -98,15 +76,10 @@ app.post('/documents', async (req, res, next) => {
     const id = randomUUID();
     const vector = await embed(text);
 
-    await qdrantRequest(
-      `/collections/${encodeURIComponent(QDRANT_COLLECTION)}/points?wait=true`,
-      {
-        method: 'PUT',
-        data: {
-          points: [{ id, vector, payload: { text, metadata } }]
-        }
-      }
-    );
+    await qdrant.upsert(QDRANT_COLLECTION, {
+      wait: true,
+      points: [{ id, vector, payload: { text, metadata } }]
+    });
 
     res.status(201).json({ id, message: 'Document added' });
   } catch (error) {
@@ -126,14 +99,12 @@ app.post('/search', async (req, res, next) => {
 
     await ensureCollection();
     const vector = await embed(query);
-    const response = await qdrantRequest(
-      `/collections/${encodeURIComponent(QDRANT_COLLECTION)}/points/search`,
-      {
-        method: 'POST',
-        data: { vector, limit, with_payload: true }
-      }
-    );
-    const results = response.result || [];
+    const response = await qdrant.query(QDRANT_COLLECTION, {
+      query: vector,
+      limit,
+      with_payload: true
+    });
+    const results = response.points;
     const answer = await generateAnswer(query, results);
 
     res.json({
@@ -152,8 +123,8 @@ app.post('/search', async (req, res, next) => {
 
 app.use((error, _req, res, _next) => {
   console.error(error);
-  const status = error.response?.status || error.status || 500;
-  const message = error.response?.data?.error?.message || error.message || 'Internal server error';
+  const status = error.status || 500;
+  const message = error.message || 'Internal server error';
   res.status(status).json({ error: message });
 });
 
